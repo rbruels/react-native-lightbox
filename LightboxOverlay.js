@@ -9,7 +9,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -66,7 +66,6 @@ const LightboxOverlay = (props) => {
   const [target, setTarget] = useState({
     x: 0,
     y: 0,
-    opacity: 1,
   });
 
   useEffect(() => {
@@ -91,7 +90,6 @@ const LightboxOverlay = (props) => {
           setTarget({
             y: gestureState.dy,
             x: gestureState.dx,
-            opacity: 1 - Math.abs(gestureState.dy / WINDOW_HEIGHT),
           });
 
           close();
@@ -123,7 +121,6 @@ const LightboxOverlay = (props) => {
     setTarget({
       x: 0,
       y: 0,
-      opacity: 1,
     });
 
     Animated.spring(openVal.current, {
@@ -153,13 +150,6 @@ const LightboxOverlay = (props) => {
     });
   };
 
-  const lightboxOpacityStyle = {
-    opacity: openVal.current.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, target.opacity],
-    }),
-  };
-
   let handlers;
   if (props.swipeToDismiss && _panResponder.current) {
     handlers = _panResponder.current.panHandlers;
@@ -170,10 +160,6 @@ const LightboxOverlay = (props) => {
     dragStyle = {
       top: pan.current,
     };
-    lightboxOpacityStyle.opacity = pan.current.interpolate({
-      inputRange: [-WINDOW_HEIGHT, 0, WINDOW_HEIGHT],
-      outputRange: [0, 1, 0],
-    });
   }
 
   const openStyle = [
@@ -206,18 +192,17 @@ const LightboxOverlay = (props) => {
       style={[
         styles.background,
         { backgroundColor: props.backgroundColor },
-        lightboxOpacityStyle,
       ]}
     ></Animated.View>
   );
   const header = (
-    <Animated.View style={[styles.header, lightboxOpacityStyle]}>
+    <Animated.View style={[styles.header]}>
       {props.renderHeader ? (
         props.renderHeader(close)
       ) : (
-        <TouchableOpacity onPress={close}>
+        <TouchableWithoutFeedback onPress={close}>
           <Text style={styles.closeButton}>×</Text>
-        </TouchableOpacity>
+        </TouchableWithoutFeedback>
       )}
     </Animated.View>
   );

@@ -5,12 +5,11 @@ import React, {
   useState,
   useRef,
 } from "react";
-import { Animated, TouchableOpacity, View } from "react-native";
+import { Animated, TouchableWithoutFeedback, View } from "react-native";
 import PropTypes from "prop-types";
 import LightboxOverlay from "./LightboxOverlay";
 
 const Lightbox = (props) => {
-  const layoutOpacity = useRef(new Animated.Value(1));
   const _root = useRef();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -69,10 +68,6 @@ const Lightbox = (props) => {
       } else {
         setIsOpen(true);
       }
-
-      setTimeout(() => {
-        _root && _root.current && layoutOpacity.current.setValue(0);
-      });
     });
   };
 
@@ -83,8 +78,6 @@ const Lightbox = (props) => {
   };
 
   onClose = () => {
-    layoutOpacity.current.setValue(1);
-
     setIsOpen(false);
 
     if (props.navigator) {
@@ -96,14 +89,14 @@ const Lightbox = (props) => {
 
   return (
     <View ref={_root} style={props.style} onLayout={() => {}}>
-      <Animated.View style={{ opacity: layoutOpacity.current }}>
-        <TouchableOpacity
+      <Animated.View>
+        <TouchableWithoutFeedback
           underlayColor={props.underlayColor}
           onPress={open}
           onLongPress={props.onLongPress}
         >
           {props.children}
-        </TouchableOpacity>
+        </TouchableWithoutFeedback>
       </Animated.View>
       {props.navigator ? false : <LightboxOverlay {...getOverlayProps()} />}
     </View>
