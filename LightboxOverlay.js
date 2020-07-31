@@ -12,33 +12,35 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import ViewTransformer from "react-native-easy-view-transformer";
 
-const WINDOW_HEIGHT = Dimensions.get("window").height;
 const WINDOW_WIDTH = Dimensions.get("window").width;
-const DRAG_DISMISS_THRESHOLD = 150;
+const WINDOW_HEIGHT = Dimensions.get("window").height;
+const DRAG_DISMISS_THRESHOLD_X = 120;
+const DRAG_DISMISS_THRESHOLD_Y = 250;
 const isIOS = Platform.OS === "ios";
 
 const styles = StyleSheet.create({
   background: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
   },
   open: {
-    position: "absolute",
+    position: 'absolute',
     flex: 1,
-    justifyContent: "center",
+    justifyContent: 'center',
     // Android pan handlers crash without this declaration:
-    backgroundColor: "transparent",
+    backgroundColor: 'transparent',
   },
   header: {
     position: "absolute",
     top: 0,
     left: 0,
     width: WINDOW_WIDTH,
-    backgroundColor: "transparent",
+    backgroundColor: 'transparent',
   },
   closeButton: {
     fontSize: 35,
@@ -58,11 +60,15 @@ const styles = StyleSheet.create({
 
 const LightboxOverlay = (props) => {
   const _panResponder = useRef();
-  const pan = useRef(new Animated.Value(0));
+  const panX= useRef(new Animated.Value(0));
+  const panY= useRef(new Animated.Value(0));
   const openVal = useRef(new Animated.Value(0));
 
+  const [isOpen, setIsOpen] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [isViewScaled, setIsViewScaled] = useState(false);
+  const [panningDir, setPanningDir] = useState('x');
   const [target, setTarget] = useState({
     x: 0,
     y: 0,
@@ -72,35 +78,49 @@ const LightboxOverlay = (props) => {
   useEffect(() => {
     _panResponder.current = PanResponder.create({
       // Ask to be the responder:
-      onStartShouldSetPanResponder: (evt, gestureState) => !isAnimating,
-      onStartShouldSetPanResponderCapture: (evt, gestureState) => !isAnimating,
-      onMoveShouldSetPanResponder: (evt, gestureState) => !isAnimating,
-      onMoveShouldSetPanResponderCapture: (evt, gestureState) => !isAnimating,
+      onStartShouldSetPanResponder: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
+      onStartShouldSetPanResponderCapture: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
+      onMoveShouldSetPanResponder: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
+      onMoveShouldSetPanResponderCapture: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
 
       onPanResponderGrant: (evt, gestureState) => {
-        pan.current.setValue(0);
+        panX.current.setValue(0);
+        panY.current.setValue(0);
+        setPanningDir('x');
         setIsPanning(true);
       },
-      onPanResponderMove: Animated.event([null, { dy: pan.current }], {
-        useNativeDriver: false,
-      }),
+      onPanResponderMove: (evt, gestureState) => { 
+        setPanningDir(Math.abs(gestureState.dx) > Math.abs(gestureState.dy) ? 'x' : 'y'); 
+        Animated.event([null, { 
+          dy: panY.current, 
+          dx: panX.current 
+        }], {
+          useNativeDriver: false,
+        })(evt, gestureState);
+      },
       onPanResponderTerminationRequest: (evt, gestureState) => true,
       onPanResponderRelease: (evt, gestureState) => {
-        if (Math.abs(gestureState.dy) > DRAG_DISMISS_THRESHOLD) {
+        if (Math.abs(gestureState.dy) > DRAG_DISMISS_THRESHOLD_Y || Math.abs(gestureState.dx) > DRAG_DISMISS_THRESHOLD_X) {
           setIsPanning(false);
           setTarget({
             y: gestureState.dy,
             x: gestureState.dx,
-            opacity: 1 - Math.abs(gestureState.dy / WINDOW_HEIGHT),
+            opacity: 1 - Math.abs(Math.max(gestureState.dy / WINDOW_HEIGHT, gestureState.dx / WINDOW_WIDTH)),
           });
-
           close();
         } else {
-          Animated.spring(pan.current, {
-            toValue: 0,
-            ...props.springConfig,
-            useNativeDriver: false,
-          }).start(() => setIsPanning(false));
+          Animated.parallel([
+            Animated.spring(panX.current, {
+              toValue: 0,
+              ...props.springConfig,
+              useNativeDriver: false,
+            }),
+            Animated.spring(panY.current, {
+              toValue: 0,
+              ...props.springConfig,
+              useNativeDriver: false,
+            })
+          ]).start(() => setIsPanning(false));
         }
       },
     });
@@ -117,15 +137,16 @@ const LightboxOverlay = (props) => {
       StatusBar.setHidden(true, "fade");
     }
 
-    pan.current.setValue(0);
+    panX.current.setValue(0);
+    panY.current.setValue(0);
 
     setIsAnimating(true);
+    setIsOpen(true);
     setTarget({
       x: 0,
       y: 0,
       opacity: 1,
     });
-
     Animated.spring(openVal.current, {
       toValue: 1,
       ...props.springConfig,
@@ -143,6 +164,7 @@ const LightboxOverlay = (props) => {
     }
 
     setIsAnimating(true);
+    setIsOpen(false);
     Animated.spring(openVal.current, {
       toValue: 0,
       ...props.springConfig,
@@ -161,17 +183,24 @@ const LightboxOverlay = (props) => {
   };
 
   let handlers;
-  if (props.swipeToDismiss && _panResponder.current) {
+  if (props.swipeToDismiss && _panResponder.current && !isViewScaled) {
     handlers = _panResponder.current.panHandlers;
   }
 
   let dragStyle;
   if (isPanning) {
     dragStyle = {
-      top: pan.current,
+      top: panY.current,
+      left: panX.current
     };
+    var maxDimension = WINDOW_WIDTH;
+    var pan = panX;
+    if(panningDir == 'y') {
+      maxDimension = WINDOW_HEIGHT;
+      pan = panY;
+    }
     lightboxOpacityStyle.opacity = pan.current.interpolate({
-      inputRange: [-WINDOW_HEIGHT, 0, WINDOW_HEIGHT],
+      inputRange: [-maxDimension, 0, maxDimension],
       outputRange: [0, 1, 0],
     });
   }
@@ -223,7 +252,16 @@ const LightboxOverlay = (props) => {
   );
   const content = (
     <Animated.View style={[openStyle, dragStyle]} {...handlers}>
+      <ViewTransformer
+        style={{backgroundColor: 'purple'}}
+        maxScale={2}
+        enableResistance={false}
+        onViewTransformed={(tfn) => {
+          setIsViewScaled(tfn.scale !== 1.0);
+        }}
+      >
       {props.children}
+      </ViewTransformer>
     </Animated.View>
   );
 

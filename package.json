@@ -30,6 +30,7 @@
   },
   "homepage": "https://github.com/oblador/react-native-lightbox",
   "dependencies": {
-    "prop-types": "^15.7.2"
+    "prop-types": "^15.7.2",
+    "react-native-easy-view-transformer": "^1.2.0"
   }
 }
