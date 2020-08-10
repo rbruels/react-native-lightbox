@@ -4,7 +4,6 @@ import {
   Animated,
   Dimensions,
   Modal,
-  PanResponder,
   Platform,
   StatusBar,
   StyleSheet,
@@ -55,76 +54,24 @@ const styles = StyleSheet.create({
     shadowRadius: 1.5,
     shadowColor: "black",
     shadowOpacity: 0.8,
+    marginTop: 20,
   },
 });
 
 const LightboxOverlay = (props) => {
-  const _panResponder = useRef();
-  const panX= useRef(new Animated.Value(0));
-  const panY= useRef(new Animated.Value(0));
+  
   const openVal = useRef(new Animated.Value(0));
+  const opacityVal = new Animated.Value(1.0);
 
+  const [allowTransform, setAllowTransform] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
   const [isViewScaled, setIsViewScaled] = useState(false);
-  const [panningDir, setPanningDir] = useState('x');
   const [target, setTarget] = useState({
     x: 0,
     y: 0,
-    opacity: 1,
+    opacity: 1.0
   });
-
-  useEffect(() => {
-    _panResponder.current = PanResponder.create({
-      // Ask to be the responder:
-      onStartShouldSetPanResponder: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
-      onStartShouldSetPanResponderCapture: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
-      onMoveShouldSetPanResponder: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
-      onMoveShouldSetPanResponderCapture: (evt, gestureState) => !isAnimating && gestureState.numberActiveTouches == 1,
-
-      onPanResponderGrant: (evt, gestureState) => {
-        panX.current.setValue(0);
-        panY.current.setValue(0);
-        setPanningDir('x');
-        setIsPanning(true);
-      },
-      onPanResponderMove: (evt, gestureState) => { 
-        setPanningDir(Math.abs(gestureState.dx) > Math.abs(gestureState.dy) ? 'x' : 'y'); 
-        Animated.event([null, { 
-          dy: panY.current, 
-          dx: panX.current 
-        }], {
-          useNativeDriver: false,
-        })(evt, gestureState);
-      },
-      onPanResponderTerminationRequest: (evt, gestureState) => true,
-      onPanResponderRelease: (evt, gestureState) => {
-        if (Math.abs(gestureState.dy) > DRAG_DISMISS_THRESHOLD_Y || Math.abs(gestureState.dx) > DRAG_DISMISS_THRESHOLD_X) {
-          setIsPanning(false);
-          setTarget({
-            y: gestureState.dy,
-            x: gestureState.dx,
-            opacity: 1 - Math.abs(Math.max(gestureState.dy / WINDOW_HEIGHT, gestureState.dx / WINDOW_WIDTH)),
-          });
-          close();
-        } else {
-          Animated.parallel([
-            Animated.spring(panX.current, {
-              toValue: 0,
-              ...props.springConfig,
-              useNativeDriver: false,
-            }),
-            Animated.spring(panY.current, {
-              toValue: 0,
-              ...props.springConfig,
-              useNativeDriver: false,
-            })
-          ]).start(() => setIsPanning(false));
-        }
-      },
-    });
-  }, []);
 
   useEffect(() => {
     if (props.isOpen) {
@@ -137,15 +84,12 @@ const LightboxOverlay = (props) => {
       StatusBar.setHidden(true, "fade");
     }
 
-    panX.current.setValue(0);
-    panY.current.setValue(0);
-
     setIsAnimating(true);
     setIsOpen(true);
     setTarget({
       x: 0,
       y: 0,
-      opacity: 1,
+      opacity: 1.0,
     });
     Animated.spring(openVal.current, {
       toValue: 1,
@@ -181,29 +125,6 @@ const LightboxOverlay = (props) => {
       outputRange: [0, target.opacity],
     }),
   };
-
-  let handlers;
-  if (props.swipeToDismiss && _panResponder.current && !isViewScaled) {
-    handlers = _panResponder.current.panHandlers;
-  }
-
-  let dragStyle;
-  if (isPanning) {
-    dragStyle = {
-      top: panY.current,
-      left: panX.current
-    };
-    var maxDimension = WINDOW_WIDTH;
-    var pan = panX;
-    if(panningDir == 'y') {
-      maxDimension = WINDOW_HEIGHT;
-      pan = panY;
-    }
-    lightboxOpacityStyle.opacity = pan.current.interpolate({
-      inputRange: [-maxDimension, 0, maxDimension],
-      outputRange: [0, 1, 0],
-    });
-  }
 
   const openStyle = [
     styles.open,
@@ -251,16 +172,43 @@ const LightboxOverlay = (props) => {
     </Animated.View>
   );
   const content = (
-    <Animated.View style={[openStyle, dragStyle]} {...handlers}>
+    <Animated.View style={[openStyle]}>
+      <Animated.View style={{
+        position: 'absolute', 
+        width: '100%', 
+        height: '100%', 
+        justifyContent: 'center', 
+        opacity: opacityVal
+      }}/>
       <ViewTransformer
-        style={{backgroundColor: 'purple'}}
         maxScale={2}
         enableResistance={false}
-        onViewTransformed={(tfn) => {
-          setIsViewScaled(tfn.scale !== 1.0);
+        enableTransform={allowTransform}
+        onTransformGestureReleased={(tfn) => {
+          if(tfn.scale !== 1.0) {
+            return;
+          }
+          if( Math.abs(tfn.translateX/WINDOW_WIDTH) > 0.45 || Math.abs(tfn.translateY/WINDOW_HEIGHT) > 0.25 ) {
+            setTimeout(close, 150);
+          }
         }}
-      >
-      {props.children}
+        onViewTransformed={(tfn) => {
+          if(!allowTransform) {
+            return;
+          }
+          const isScaled = tfn.scale !== 1.0
+          setIsViewScaled(isScaled);
+          if(!isAnimating && !isScaled) {
+          // TODO -- why can't I fade the background here?
+            const transX = Math.abs(tfn.translateX/WINDOW_WIDTH);
+            const transY = Math.abs(tfn.translateY/WINDOW_HEIGHT);
+            var opacity = (1.0 - Math.max(transX, transY)) * 1.35;
+            opacityVal.setValue(opacity >= 1.0 ? 1.0 : opacity);
+          }
+        }}>
+          <View style={{flex: 1, justifyContent: 'center'}}>
+            {props.children}
+          </View>
       </ViewTransformer>
     </Animated.View>
   );
@@ -277,8 +225,13 @@ const LightboxOverlay = (props) => {
         <Modal
           visible={props.isOpen}
           transparent={true}
-          onRequestClose={() => close()}
-        >
+          onShow={() => {
+            setAllowTransform(true);
+          }}
+          onRequestClose={() => {
+            setAllowTransform(false);
+            close()
+          }}>
           {background}
           {content}
           {header}
