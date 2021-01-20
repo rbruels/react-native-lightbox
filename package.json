@@ -30,6 +30,7 @@
   },
   "homepage": "https://github.com/oblador/react-native-lightbox",
   "dependencies": {
-    "prop-types": "^15.7.2"
+    "prop-types": "^15.7.2",
+    "react-native-device-info": "^8.0.0"
   }
 }

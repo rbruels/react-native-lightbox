@@ -11,55 +11,57 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import DeviceInfo from 'react-native-device-info';
 import ViewTransformer from "react-native-easy-view-transformer";
 
-const WINDOW_WIDTH = Dimensions.get("window").width;
-const WINDOW_HEIGHT = Dimensions.get("window").height;
 const DRAG_DISMISS_THRESHOLD_X = 120;
 const DRAG_DISMISS_THRESHOLD_Y = 250;
 const isIOS = Platform.OS === "ios";
 
-const styles = StyleSheet.create({
-  background: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
-  },
-  open: {
-    position: 'absolute',
-    flex: 1,
-    justifyContent: 'center',
-    // Android pan handlers crash without this declaration:
-    backgroundColor: 'transparent',
-  },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: WINDOW_WIDTH,
-    backgroundColor: 'transparent',
-  },
-  closeButton: {
-    fontSize: 35,
-    color: "white",
-    lineHeight: 60,
-    width: 70,
-    textAlign: "center",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowRadius: 1.5,
-    shadowColor: "black",
-    shadowOpacity: 0.8,
-    marginTop: 20,
-  },
-});
-
 const LightboxOverlay = (props) => {
   
+  const [deviceWidth, setDeviceWidth] = useState(Dimensions.get("window").width);
+  const [deviceHeight, setDeviceHeight] = useState(Dimensions.get("window").height);
+
+  const styles = StyleSheet.create({
+    background: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: deviceWidth,
+      height: deviceHeight,
+    },
+    open: {
+      position: 'absolute',
+      flex: 1,
+      justifyContent: 'center',
+      // Android pan handlers crash without this declaration:
+      backgroundColor: 'transparent',
+    },
+    header: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: deviceWidth,
+      backgroundColor: 'transparent',
+    },
+    closeButton: {
+      fontSize: 35,
+      color: "white",
+      lineHeight: 60,
+      width: 70,
+      textAlign: "center",
+      shadowOffset: {
+        width: 0,
+        height: 0,
+      },
+      shadowRadius: 1.5,
+      shadowColor: "black",
+      shadowOpacity: 0.8,
+      marginTop: 20,
+    },
+  });
+
   const openVal = useRef(new Animated.Value(0));
   const opacityVal = new Animated.Value(1.0);
 
@@ -72,6 +74,19 @@ const LightboxOverlay = (props) => {
     y: 0,
     opacity: 1.0
   });
+
+  const handleRotation = () => {
+    if (DeviceInfo.isTablet()) {
+      setDeviceWidth(Dimensions.get('window').width);
+      setDeviceHeight(Dimensions.get('window').height);
+    }
+  };
+  useEffect(() => {
+    Dimensions.addEventListener("change", handleRotation);
+    return () => {
+      Dimensions.removeEventListener("change", handleRotation);
+    };
+  }, []);
 
   useEffect(() => {
     if (props.isOpen) {
@@ -142,11 +157,11 @@ const LightboxOverlay = (props) => {
       }),
       width: openVal.current.interpolate({
         inputRange: [0, 1],
-        outputRange: [props.origin.width, WINDOW_WIDTH],
+        outputRange: [props.origin.width, deviceWidth],
       }),
       height: openVal.current.interpolate({
         inputRange: [0, 1],
-        outputRange: [props.origin.height, WINDOW_HEIGHT],
+        outputRange: [props.origin.height, deviceHeight],
       }),
     },
   ];
@@ -188,7 +203,7 @@ const LightboxOverlay = (props) => {
           if(tfn.scale !== 1.0) {
             return;
           }
-          if( Math.abs(tfn.translateX/WINDOW_WIDTH) > 0.45 || Math.abs(tfn.translateY/WINDOW_HEIGHT) > 0.25 ) {
+          if( Math.abs(tfn.translateX/deviceWidth) > 0.25 || Math.abs(tfn.translateY/deviceHeight) > 0.15 ) {
             setTimeout(close, 150);
           }
         }}
@@ -200,8 +215,8 @@ const LightboxOverlay = (props) => {
           setIsViewScaled(isScaled);
           if(!isAnimating && !isScaled) {
           // TODO -- why can't I fade the background here?
-            const transX = Math.abs(tfn.translateX/WINDOW_WIDTH);
-            const transY = Math.abs(tfn.translateY/WINDOW_HEIGHT);
+            const transX = Math.abs(tfn.translateX/deviceWidth);
+            const transY = Math.abs(tfn.translateY/deviceHeight);
             var opacity = (1.0 - Math.max(transX, transY)) * 1.35;
             opacityVal.setValue(opacity >= 1.0 ? 1.0 : opacity);
           }
